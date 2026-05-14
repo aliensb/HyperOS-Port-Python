@@ -126,3 +126,12 @@ class TestLoadDeviceConfig:
         assert result["wild_boost"]["enable"] is True
         # Common values should be preserved
         assert result["pack"]["type"] == "payload"
+
+    def test_load_xuanyuan_device_config(self):
+        """Test Xiaomi 15 Ultra device config is available."""
+        result = load_device_config("xuanyuan")
+
+        assert result["wild_boost"]["enable"] is False
+        assert result["pack"]["type"] == "payload"
+        assert result["pack"]["fs_type"] == "erofs"
+        assert result["ksu"]["enable"] is False

@@ -1,0 +1,16 @@
+{
+    "_comment": "Xuanyuan (小米 15 Ultra) 设备配置",
+    "wild_boost": {
+        "enable": false
+    },
+    "pack": {
+        "type": "payload",
+        "fs_type": "erofs"
+    },
+    "ksu": {
+        "enable": false
+    },
+    "cache": {
+        "partitions": false
+    }
+}

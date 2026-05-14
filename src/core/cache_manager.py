@@ -35,12 +35,13 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import platform
 import shutil
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import IO, Any, Dict, List, Optional, Union, cast
 
 # Cache format version
 CACHE_VERSION = "1.0"
@@ -94,15 +95,13 @@ class FileLock:
 
     def acquire(self) -> bool:
         """Acquire file lock."""
-        import fcntl
-
         self.lock_file.parent.mkdir(parents=True, exist_ok=True)
 
         start_time = time.time()
         while True:
             try:
-                self._lock_fd = open(self.lock_file, "w")
-                fcntl.flock(self._lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                self._lock_fd = open(self.lock_file, "a+b")
+                self._lock_handle(self._lock_fd)
                 self._logger.debug(f"Lock acquired: {self.lock_file}")
                 return True
             except (IOError, OSError) as err:
@@ -112,25 +111,52 @@ class FileLock:
 
                 if time.time() - start_time > self.timeout:
                     self._logger.warning(f"Lock timeout after {self.timeout}s")
-                    raise TimeoutError(
-                        f"Could not acquire lock: {self.lock_file}"
-                    ) from err
+                    raise TimeoutError(f"Could not acquire lock: {self.lock_file}") from err
 
                 time.sleep(0.1)
 
     def release(self):
         """Release file lock."""
-        import fcntl
-
         if self._lock_fd:
             try:
-                fcntl.flock(self._lock_fd.fileno(), fcntl.LOCK_UN)
+                self._unlock_handle(self._lock_fd)
                 self._lock_fd.close()
                 self._logger.debug(f"Lock released: {self.lock_file}")
             except Exception as e:
                 self._logger.error(f"Error releasing lock: {e}")
             finally:
                 self._lock_fd = None
+
+    @staticmethod
+    def _lock_handle(lock_fd: IO[Any]) -> None:
+        if platform.system() == "Windows":
+            import msvcrt
+
+            lock_fd.seek(0)
+            msvcrt.locking(lock_fd.fileno(), msvcrt.LK_NBLCK, 1)
+            return
+
+        import fcntl
+
+        fcntl_module = cast(Any, fcntl)
+        fcntl_module.flock(
+            lock_fd.fileno(),
+            fcntl_module.LOCK_EX | fcntl_module.LOCK_NB,
+        )
+
+    @staticmethod
+    def _unlock_handle(lock_fd: IO[Any]) -> None:
+        if platform.system() == "Windows":
+            import msvcrt
+
+            lock_fd.seek(0)
+            msvcrt.locking(lock_fd.fileno(), msvcrt.LK_UNLCK, 1)
+            return
+
+        import fcntl
+
+        fcntl_module = cast(Any, fcntl)
+        fcntl_module.flock(lock_fd.fileno(), fcntl_module.LOCK_UN)
 
 
 class PortRomCacheManager:

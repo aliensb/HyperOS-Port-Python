@@ -1,0 +1,10 @@
+{
+    "xml_features": {},
+    "build_props": {
+        "product": {
+            "ro.product.spoofed.name": "xuanyuan",
+            "ro.spoofed.device": "xuanyuan",
+            "persist.sys.miui.unfairMemory.enable": "false"
+        }
+    }
+}
