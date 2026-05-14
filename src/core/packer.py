@@ -960,6 +960,7 @@ class Repacker:
             9122611200: ["SUNSTONE"],
             11811160064: ["YUDI"],
             13411287040: ["PANDORA", "POPSICLE", "PUDDING", "NEZHA"],
+            13421772800: ["XUANYUAN"],
         }
         for size, devices in size_map.items():
             if device_code in devices:
@@ -1859,6 +1860,7 @@ class Repacker:
                     "-v",
                     "-k",
                     str(key_path),
+                    "--java_args", "-Xmx8192m",
                     str(self.product_out),
                     str(output_zip),
                 ],

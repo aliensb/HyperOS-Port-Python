@@ -215,6 +215,7 @@ class DeviceAutoConfig:
             9122611200: ["SUNSTONE"],
             11811160064: ["YUDI"],
             13411287040: ["PANDORA", "POPSICLE", "PUDDING", "NEZHA"],
+            13421772800: ["XUANYUAN"],
         }
         for size, devices in size_map.items():
             if device_code in devices:

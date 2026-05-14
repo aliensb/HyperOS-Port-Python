@@ -6,5 +6,6 @@
             "ro.spoofed.device": "xuanyuan",
             "persist.sys.miui.unfairMemory.enable": "false"
         }
-    }
+    },
+    "enable_eu_localization": true
 }

@@ -1,0 +1,48 @@
+[
+  {
+    "hwc": "CN",
+    "basic": {
+      "cpu": {
+        "zh": "第四代骁龙®8至尊版移动平台",
+        "en": "Snapdragon 8 Elite"
+      },
+      "battery": "6000mAh",
+      "camera": {
+        "zh": "5000万像素 徕卡四摄",
+        "en": "50MP+50MP+200MP+50MP"
+      },
+      "screen": {
+        "zh": "6.73 英寸 LTPO AMOLED",
+        "en": "6.73″ LTPO AMOLED"
+      },
+      "resolution": "3200×1440"
+    },
+    "camera": {
+      "front_camera": "32MP",
+      "rear_camera": "50MP+50MP+200MP+50MP"
+    }
+  },
+  {
+    "hwc": ["GL", "IN"],
+    "basic": {
+      "cpu": {
+        "zh": "第四代骁龙®8至尊版移动平台",
+        "en": "Snapdragon 8 Elite"
+      },
+      "battery": "5410mAh",
+      "camera": {
+        "zh": "5000万像素 徕卡四摄",
+        "en": "50MP+50MP+200MP+50MP"
+      },
+      "screen": {
+        "zh": "6.73 英寸 LTPO AMOLED",
+        "en": "6.73″ LTPO AMOLED"
+      },
+      "resolution": "3200×1440"
+    },
+    "camera": {
+      "front_camera": "32MP",
+      "rear_camera": "50MP+50MP+200MP+50MP"
+    }
+  }
+]

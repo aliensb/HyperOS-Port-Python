@@ -5,7 +5,8 @@
     },
     "pack": {
         "type": "payload",
-        "fs_type": "erofs"
+        "fs_type": "erofs",
+        "super_size": 13421772800
     },
     "ksu": {
         "enable": false
