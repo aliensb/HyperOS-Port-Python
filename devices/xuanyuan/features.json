@@ -1,5 +1,16 @@
 {
-    "xml_features": {},
+    "xml_features": {
+        "support_AI_display": true,
+        "support_screen_enhance_engine": true,
+        "support_SR_for_image_display": true,
+        "support_aod_fullscreen": true,
+        "support_aod_aon": true,
+        "support_manual_dimming": true,
+        "support_main_xiaoai": false,
+        "support_ota_validate": false,
+        "support_power_consumption": true,
+        "support_simplified_colormode": false
+    },
     "build_props": {
         "product": {
             "ro.product.spoofed.name": "xuanyuan",
