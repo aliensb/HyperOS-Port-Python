@@ -12,9 +12,6 @@ class ContextPatcher:
         # Define fixed permissions for specific paths
         self.fix_permission = {
             "/vendor/bin/hw/android.hardware.wifi@1.0": ["u:object_r:hal_wifi_default_exec:s0"],
-            "/system/system/bin/pif-updater": ["u:object_r:pif_updater_exec:s0"],
-            "/vendor/app/PIF.apk": ["u:object_r:vendor_app_file:s0"],
-            # Add more fixed permissions here if needed
         }
 
     def scan_context(self, file) -> dict:  

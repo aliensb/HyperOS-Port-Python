@@ -24,7 +24,7 @@ class FrameworkModifier(FrameworkTasks):
     This class orchestrates the modification of framework JARs including:
     - miui-services.jar modifications for EU ROM compatibility
     - services.jar modifications for signature verification bypass
-    - framework.jar modifications for PropsHook, PIF injection, and signature bypass
+    - framework.jar modifications for PropsHook and signature bypass
     - Xiaomi.eu Toolbox injection
     """
 

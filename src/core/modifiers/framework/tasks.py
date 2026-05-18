@@ -178,12 +178,12 @@ class FrameworkTasks(FrameworkModifierBase):
         self._save_jar_cache("services.jar", jar_path)
 
     def _mod_framework(self) -> None:
-        """Modify framework.jar for signature bypass and PIF injection."""
+        """Modify framework.jar for signature bypass and PropsHook."""
         jar = self._find_file(self.ctx.target_dir, "framework.jar")
         if not jar:
             return
 
-        self.logger.info(f"Modifying {jar.name} (PropsHook, PIF & SignBypass)...")
+        self.logger.info(f"Modifying {jar.name} (PropsHook & SignBypass)...")
 
         wd = self.temp_dir / "framework"
         self.shell.run_java_jar(
@@ -292,12 +292,57 @@ class FrameworkTasks(FrameworkModifierBase):
             remake=RETRUN_TRUE,
         )
 
-        # Apply PIF patch
-        pif_zip = Path("devices/common/pif_patch_v2.zip")
-        if pif_zip.exists():
-            self._apply_pif_patch(wd, pif_zip)
-        else:
-            self.logger.warning("pif_patch_v2.zip not found, skipping PIF injection.")
+        # Hook Instrumentation for PropsHook
+        inst_smali = self._find_file(wd, "Instrumentation.smali")
+        if inst_smali:
+            content = inst_smali.read_text(encoding="utf-8", errors="ignore")
+
+            method1 = "newApplication(Ljava/lang/ClassLoader;Ljava/lang/String;Landroid/content/Context;)Landroid/app/Application;"
+            if method1 in content:
+                reg = self._extract_register_from_invoke(
+                    content,
+                    method1,
+                    "Landroid/app/Application;->attach(Landroid/content/Context;)V",
+                    arg_index=1,
+                )
+                if reg:
+                    patch_code = f"    invoke-static {{{reg}}}, Lcom/android/internal/util/PropsHookUtils;->setProps(Landroid/content/Context;)V"
+                    self._run_smalikit(
+                        file_path=str(inst_smali),
+                        method=method1,
+                        before_line=["return-object", patch_code],
+                    )
+
+            method2 = "newApplication(Ljava/lang/Class;Landroid/content/Context;)Landroid/app/Application;"
+            if method2 in content:
+                reg = self._extract_register_from_invoke(
+                    content,
+                    method2,
+                    "Landroid/app/Application;->attach(Landroid/content/Context;)V",
+                    arg_index=1,
+                )
+                if reg:
+                    patch_code = f"    invoke-static {{{reg}}}, Lcom/android/internal/util/PropsHookUtils;->setProps(Landroid/content/Context;)V"
+                    self._run_smalikit(
+                        file_path=str(inst_smali),
+                        method=method2,
+                        before_line=["return-object", patch_code],
+                    )
+
+        # Hook ApplicationPackageManager
+        app_pm_smali = self._find_file(wd, "ApplicationPackageManager.smali")
+        if app_pm_smali:
+            method_sig = "hasSystemFeature(Ljava/lang/String;I)Z"
+            repl_pattern = (
+                r"invoke-static {p1, \1}, Lcom/android/internal/util/PropsHookUtils;->hasSystemFeature(Ljava/lang/String;Z)Z"
+                r"\n    move-result \1"
+                r"\n    return \1"
+            )
+            self._run_smalikit(
+                file_path=str(app_pm_smali),
+                method=method_sig,
+                regex_replace=(r"return\s+([vp]\d+)", repl_pattern),
+            )
 
         # Hook PendingIntent for AutoCopy
         target_file = self._find_file(wd, "PendingIntent.smali")
@@ -434,200 +479,6 @@ class FrameworkTasks(FrameworkModifierBase):
             self.logger.info("Added onPendingIntentGetActivity to HookHelper.")
         else:
             self.logger.info("onPendingIntentGetActivity already exists.")
-
-    def _apply_pif_patch(self, work_dir: Path, pif_zip: Path) -> None:
-        """Apply PIF (Play Integrity Fix) patch."""
-        import re
-
-        self.logger.info("Applying PIF Patch (Instrumentation, KeyStoreSpi, AppPM)...")
-
-        temp_pif = self.temp_dir / "pif_classes"
-        with zipfile.ZipFile(pif_zip, "r") as z:
-            z.extractall(temp_pif)
-        self._copy_to_next_classes(work_dir, temp_pif / "classes")
-
-        self.logger.info(f"Merging files from {temp_pif} to {self.ctx.target_dir}...")
-
-        for item in temp_pif.iterdir():
-            if item.name == "classes":
-                continue
-
-            target_path = self.ctx.target_dir / item.name
-            self.logger.info(f"  Merging: {item.name} -> {target_path}")
-
-            if item.is_dir():
-                shutil.copytree(item, target_path, symlinks=True, dirs_exist_ok=True)
-            else:
-                if target_path.exists() or Path(target_path).is_symlink():
-                    if target_path.is_dir():
-                        shutil.rmtree(target_path)
-                    else:
-                        import os
-
-                        os.unlink(target_path)
-                shutil.copy2(item, target_path, follow_symlinks=False)
-
-        # Hook Instrumentation
-        inst_smali = self._find_file(work_dir, "Instrumentation.smali")
-        if inst_smali:
-            content = inst_smali.read_text(encoding="utf-8", errors="ignore")
-
-            method1 = "newApplication(Ljava/lang/ClassLoader;Ljava/lang/String;Landroid/content/Context;)Landroid/app/Application;"
-            if method1 in content:
-                reg = self._extract_register_from_invoke(
-                    content,
-                    method1,
-                    "Landroid/app/Application;->attach(Landroid/content/Context;)V",
-                    arg_index=1,
-                )
-                if reg:
-                    patch_code = f"    invoke-static {{{reg}}}, Lcom/android/internal/util/PropsHookUtils;->setProps(Landroid/content/Context;)V\n    invoke-static {{{reg}}}, Lcom/android/internal/util/danda/OemPorts10TUtils;->onNewApplication(Landroid/content/Context;)V"
-                    self._run_smalikit(
-                        file_path=str(inst_smali),
-                        method=method1,
-                        before_line=["return-object", patch_code],
-                    )
-
-            method2 = "newApplication(Ljava/lang/Class;Landroid/content/Context;)Landroid/app/Application;"
-            if method2 in content:
-                reg = self._extract_register_from_invoke(
-                    content,
-                    method2,
-                    "Landroid/app/Application;->attach(Landroid/content/Context;)V",
-                    arg_index=1,
-                )
-                if reg:
-                    patch_code = f"    invoke-static {{{reg}}}, Lcom/android/internal/util/PropsHookUtils;->setProps(Landroid/content/Context;)V\n    invoke-static {{{reg}}}, Lcom/android/internal/util/danda/OemPorts10TUtils;->onNewApplication(Landroid/content/Context;)V"
-                    self._run_smalikit(
-                        file_path=str(inst_smali),
-                        method=method2,
-                        before_line=["return-object", patch_code],
-                    )
-
-        # Hook AndroidKeyStoreSpi
-        keystore_smali = self._find_file(work_dir, "AndroidKeyStoreSpi.smali")
-        if keystore_smali:
-            self.logger.info("Hooking AndroidKeyStoreSpi...")
-            self._run_smalikit(
-                file_path=str(keystore_smali),
-                method="engineGetCertificateChain",
-                insert_line=[
-                    "2",
-                    "    invoke-static {}, Lcom/android/internal/util/danda/OemPorts10TUtils;->onEngineGetCertificateChain()V",
-                ],
-            )
-
-        # Hook KeyStore2
-        keystore2_smali = self._find_file(work_dir, "KeyStore2.smali")
-        if keystore2_smali:
-            self.logger.info("Hooking KeyStore2...")
-            content = keystore2_smali.read_text(encoding="utf-8")
-
-            delete_key_name = "deleteKey"
-            reg = (
-                self._extract_register_from_local(content, delete_key_name, '"descriptor"') or "p1"
-            )
-            on_delete_patch = rf"    invoke-static {{{reg}}}, Lcom/android/internal/util/danda/OemPorts10TUtils;->onDeleteKey(Landroid/system/keystore2/KeyDescriptor;)V\n\n    \1"
-            self._run_smalikit(
-                file_path=str(keystore2_smali),
-                method=delete_key_name,
-                regex_replace=(
-                    r"(new-instance\s+.*?, Landroid/security/KeyStore2\$+ExternalSyntheticLambda.*)",
-                    on_delete_patch,
-                ),
-            )
-
-            get_key_entry_name = "getKeyEntry"
-            reg = (
-                self._extract_register_from_local(content, get_key_entry_name, '"descriptor"')
-                or "p1"
-            )
-            on_get_key_patch = rf"    invoke-static {{p0, v0, {reg}}}, Lcom/android/internal/util/danda/OemPorts10TUtils;->onGetKeyEntry(Ljava/lang/Object;Ljava/lang/Object;Landroid/system/keystore2/KeyDescriptor;)Landroid/system/keystore2/KeyEntryResponse;\n    move-result-object {reg}\n    if-eqz {reg}, :cond_skip_spoofing\n    return-object {reg}\n    :cond_skip_spoofing\n\n    \1"
-            self._run_smalikit(
-                file_path=str(keystore2_smali),
-                method=get_key_entry_name,
-                regex_replace=(
-                    r"(invoke-virtual\s+.*?, Landroid/security/KeyStore2;->handleRemoteExceptionWithRetry.*)",
-                    on_get_key_patch,
-                ),
-            )
-
-        # Hook KeyStoreSecurityLevel
-        keystore_lvl_smali = self._find_file(work_dir, "KeyStoreSecurityLevel.smali")
-        if keystore_lvl_smali:
-            self.logger.info("Hooking KeyStoreSecurityLevel...")
-            content = keystore_lvl_smali.read_text(encoding="utf-8")
-            gen_key_name = "generateKey"
-
-            method_pattern = re.compile(
-                rf"\.method[^\n]*?{gen_key_name}(.*?)\.end method", re.DOTALL
-            )
-            m = method_pattern.search(content)
-
-            desc_reg, args_reg, ret_reg = "p1", "p3", "v0"
-
-            if m:
-                body = m.group(1)
-                range_match = re.search(
-                    r"invoke-direct\/range\s+{(?P<start>[vp]\d+)\s+\.\.\s+(?P<end>[vp]\d+)}", body
-                )
-                if range_match:
-                    start_reg = range_match.group("start")
-                    start_prefix = start_reg[0]
-                    start_num = int(start_reg[1:])
-                    desc_reg = f"{start_prefix}{start_num + 2}"
-                    args_reg = f"{start_prefix}{start_num + 4}"
-                    self.logger.info(
-                        f"  -> Extracted registers from range: desc={desc_reg}, args={args_reg}"
-                    )
-
-                ret_match = re.search(r"return-object\s+([vp]\d+)", body)
-                if ret_match:
-                    ret_reg = ret_match.group(1)
-
-            gen_cert_patch = rf"    invoke-static {{p0, v0, {desc_reg}, {args_reg}}}, Lcom/android/internal/util/danda/OemPorts10TUtils;->genCertificate(Ljava/lang/Object;Ljava/lang/Object;Landroid/system/keystore2/KeyDescriptor;Ljava/util/Collection;)Landroid/system/keystore2/KeyMetadata;\n    move-result-object {ret_reg}\n    if-eqz {ret_reg}, :cond_skip_spoofing\n    return-object {ret_reg}\n    :cond_skip_spoofing\n\n    \1"
-            self._run_smalikit(
-                file_path=str(keystore_lvl_smali),
-                method=gen_key_name,
-                regex_replace=(
-                    r"(invoke-direct\s+.*?, Landroid/security/KeyStoreSecurityLevel;->handleExceptions.*)",
-                    gen_cert_patch,
-                ),
-            )
-
-        # Hook ApplicationPackageManager
-        app_pm_smali = self._find_file(work_dir, "ApplicationPackageManager.smali")
-        if app_pm_smali:
-            self.logger.info("Hooking ApplicationPackageManager...")
-            method_sig = "hasSystemFeature(Ljava/lang/String;I)Z"
-            repl_pattern = (
-                r"invoke-static {p1, \1}, Lcom/android/internal/util/PropsHookUtils;->hasSystemFeature(Ljava/lang/String;Z)Z"
-                r"\n    move-result \1"
-                r"\n    return \1"
-            )
-            self._run_smalikit(
-                file_path=str(app_pm_smali),
-                method=method_sig,
-                regex_replace=(r"return\s+([vp]\d+)", repl_pattern),
-            )
-
-        # Apply SELinux policy
-        policy_tool = self.bin_dir / "insert_selinux_policy.py"
-        config_json = Path("devices/common/pif_updater_policy.json")
-        cil_path = self.ctx.target_dir / "system/system/etc/selinux/plat_sepolicy.cil"
-
-        if policy_tool.exists() and config_json.exists() and cil_path.exists():
-            self.shell.run(
-                ["python3", str(policy_tool), "--config", str(config_json), str(cil_path)]
-            )
-
-            fc_path = self.ctx.target_dir / "system/system/etc/selinux/plat_file_contexts"
-            if fc_path.exists():
-                with open(fc_path, "a") as f:
-                    f.write("\n/system/bin/pif-updater       u:object_r:pif_updater_exec:s0\n")
-                    f.write("/data/system/pif_tmp.apk  u:object_r:pif_data_file:s0\n")
-                    f.write("/data/PIF.apk u:object_r:pif_data_file:s0\n")
-                    f.write("/data/local/tmp/PIF.apk   u:object_r:pif_data_file:s0\n")
 
     def _integrate_custom_platform_key(self, work_dir: Path) -> None:
         """Inject custom platform key check into ExtraPackageManager."""

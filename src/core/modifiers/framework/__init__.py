@@ -1,7 +1,7 @@
 """Framework modifier package for smali patching operations.
 
 This package provides the FrameworkModifier class and supporting components
-for modifying Android framework JARs including signature bypasses, PIF injection,
+for modifying Android framework JARs including signature bypasses,
 and EU ROM compatibility patches.
 
 Example:
